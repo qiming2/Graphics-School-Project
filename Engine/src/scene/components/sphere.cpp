@@ -38,7 +38,42 @@ bool Sphere::IntersectLocal(const Ray &r, Intersection &i)
     // 2. put the normal in i.normal
     // 3. put the texture coordinates in i.uv
     // and return true;
-    return false;
+
+    glm::dvec3 P = r.position;
+    glm::dvec3 D = r.direction;
+
+    double a = D.x * D.x + D.y * D.y + D.z * D.z;
+    double b = 2 * (P.x * D.x + P.y * D.y + P.z * D.z);
+    double c = P.x * P.x + P.y * P.y + P.z * P.z - (0.5 * 0.5);
+
+    double discriminant = b * b - (4 * a * c);
+
+    // No intersection
+    if (discriminant < 0) {
+        return false;
+    }
+    // Set the t-value for the intersection
+    double t1 = (-b + sqrt(discriminant)) / (2 * a);
+    double t2 = (-b - sqrt(discriminant)) / (2 * a);
+
+    if (t1 == t2) { // tangent ray
+        i.t = t1;
+    } else if (t1 < t2) {
+        i.t = t1;
+    } else {
+        i.t = t2;
+    }
+
+    // Set the normal for the intersection point
+    glm::vec3 normal;
+    glm::dvec3 intersect_point = r.at(i.t);
+    double magnitude = sqrt(intersect_point.x * intersect_point.x + intersect_point.y * intersect_point.y + intersect_point.z * intersect_point.z);
+    normal.x = intersect_point.x / magnitude;
+    normal.y = intersect_point.y / magnitude;
+    normal.z = intersect_point.z / magnitude;
+    i.normal = normal;
+
+    return true;
 }
 
 void Sphere::RegenerateMesh() {
