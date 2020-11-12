@@ -24,5 +24,50 @@ bool TriangleFace::IntersectLocal(const Ray &r, Intersection &i)
    // 3. put the texture coordinates in i.uv
    // and return true;
    //
-   return false;
+
+   // Calculate the plane normal ((B - A) x (C - A))
+   glm::dvec3 AB = {b.x - a.x, b.y - a.y, b.z - a.z};
+   glm::dvec3 AC = {c.x - a.x, c.y - a.y, c.z - a.z};
+   glm::dvec3 plane_normal = glm::cross(AB, AC);
+   plane_normal = glm::normalize(plane_normal);
+
+   glm::dvec3 d = r.direction;
+   if (glm::dot(plane_normal, d) == 0.0) { // ray is parallel, no intersection
+       return false;
+   }
+   glm::dvec3 p = r.position;
+   double k = glm::dot(plane_normal, a);
+
+   // Get the t intersect value
+   i.t = (k - glm::dot(plane_normal, p)) / glm::dot(plane_normal, d);
+
+   // Intersection point on the plane
+   glm::dvec3 Q = r.at(i.t);
+
+   // Check if Q isn't within the triangle ABC
+   if (glm::dot(glm::cross((b - a), (Q - a)), plane_normal) < 0 ||
+          glm::dot(glm::cross((c - b), (Q - b)), plane_normal) < 0 ||
+          glm::dot(glm::cross((a - c), (Q - c)), plane_normal) < 0) {
+       return false;
+   }
+
+   // Get the barycentric coordinate constants
+   double alpha = glm::dot(glm::cross(c - b,Q - b), plane_normal) / glm::dot(glm::cross(b - a,c - a), plane_normal);
+   double beta = glm::dot(glm::cross(a - c,Q - c), plane_normal) / glm::dot(glm::cross(b - a,c - a), plane_normal);
+   double gamma = glm::dot(glm::cross(b - a,Q - a), plane_normal) / glm::dot(glm::cross(b - a,c - a), plane_normal);
+
+   // Calculate the normal at point Q
+   if (use_per_vertex_normals) {
+      i.normal = glm::normalize(((float)alpha * a_n) + ((float)beta * b_n) + ((float)gamma * c_n));
+   } else {
+      i.normal = glm::normalize((alpha * plane_normal) + (beta * plane_normal) + (gamma * plane_normal));
+   }
+
+   // Calculate the texture coordinates at point Q
+   glm::vec2 weighted_a_uv = {a_uv.x * alpha, a_uv.y * alpha};
+   glm::vec2 weighted_b_uv = {b_uv.x * beta, b_uv.y * beta};
+   glm::vec2 weighted_c_uv = {c_uv.x * gamma, c_uv.y * gamma};
+   i.uv = glm::normalize(weighted_a_uv + weighted_b_uv + weighted_c_uv);
+
+   return true;
 }
