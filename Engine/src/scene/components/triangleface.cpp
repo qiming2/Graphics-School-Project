@@ -32,7 +32,7 @@ bool TriangleFace::IntersectLocal(const Ray &r, Intersection &i)
    plane_normal = glm::normalize(plane_normal);
 
    glm::dvec3 d = r.direction;
-   if (glm::dot(plane_normal, d) == 0.0) { // ray is parallel, no intersection
+   if (abs(glm::dot(plane_normal, d)) < EDGE_EPSILON) { // ray is parallel, no intersection
        return false;
    }
    glm::dvec3 p = r.position;
@@ -45,9 +45,9 @@ bool TriangleFace::IntersectLocal(const Ray &r, Intersection &i)
    glm::dvec3 Q = r.at(i.t);
 
    // Check if Q isn't within the triangle ABC
-   if (glm::dot(glm::cross((b - a), (Q - a)), plane_normal) < 0 ||
-          glm::dot(glm::cross((c - b), (Q - b)), plane_normal) < 0 ||
-          glm::dot(glm::cross((a - c), (Q - c)), plane_normal) < 0) {
+   if (glm::dot(glm::cross((b - a), (Q - a)), plane_normal) < EDGE_EPSILON ||
+          glm::dot(glm::cross((c - b), (Q - b)), plane_normal) < EDGE_EPSILON ||
+          glm::dot(glm::cross((a - c), (Q - c)), plane_normal) < EDGE_EPSILON) {
        return false;
    }
 
@@ -67,7 +67,7 @@ bool TriangleFace::IntersectLocal(const Ray &r, Intersection &i)
    glm::vec2 weighted_a_uv = {a_uv.x * alpha, a_uv.y * alpha};
    glm::vec2 weighted_b_uv = {b_uv.x * beta, b_uv.y * beta};
    glm::vec2 weighted_c_uv = {c_uv.x * gamma, c_uv.y * gamma};
-   i.uv = glm::normalize(weighted_a_uv + weighted_b_uv + weighted_c_uv);
+   i.uv = weighted_a_uv + weighted_b_uv + weighted_c_uv;
 
    return true;
 }

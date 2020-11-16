@@ -36,7 +36,7 @@ public:
 
     AttenuatingLight() :
         Light(),
-        AttenA(0.20, 0, 1, .01),
+        AttenA(0.2, 0, 1, .01),
         AttenB(0.0, 0, 1, .01),
         AttenC(0.0, 0, 1, .01)\
     {

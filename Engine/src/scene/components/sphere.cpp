@@ -49,7 +49,7 @@ bool Sphere::IntersectLocal(const Ray &r, Intersection &i)
     double discriminant = b * b - (4 * a * c);
 
     // No intersection
-    if (discriminant < 0) {
+    if (discriminant < 0.00000001) {
         return false;
     }
     // Set the t-value for the intersection

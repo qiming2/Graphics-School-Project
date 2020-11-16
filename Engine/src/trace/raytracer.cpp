@@ -19,6 +19,8 @@
 #include <glm/gtx/string_cast.hpp>
 #include "components.h"
 
+using namespace std;
+
 unsigned int pow4(unsigned int e) {
     unsigned int i = 1;
     while(e>0) {
@@ -206,23 +208,92 @@ glm::vec3 RayTracer::SampleCamera(double x_corner, double y_corner, double pixel
     return TraceRay(camera_ray, 0, RayType::camera, debug_camera);
 }
 
+std::ostream& operator<<(std::ostream& stream, glm::vec3 vec) {
+    stream << "X:" << vec.x << "Y" << vec.y << "Z" << vec.z;
+    return stream;
+}
+
+typedef struct Light_info {
+    glm::vec3 L;
+    glm::vec3 I;
+    glm::vec3 ka;
+} Light_info;
+
+void GetLightInfo(TraceLight* trace_light, const glm::vec3& endP, Light_info& info) {
+    PointLight* plight;
+    DirectionalLight* dLight;
+    Light* light = trace_light->light;
+    if (plight = dynamic_cast<PointLight*>(light)) {
+        double a = plight->AttenA.Get();
+        double b = plight->AttenB.Get();
+        double c = plight->AttenC.Get();
+        glm::vec3 light_pos = trace_light->GetTransformPos();
+        glm::vec3 direction = light_pos - endP;
+        double r = glm::length(light_pos - endP);
+        double attenMag = (c + b * r + a * pow(r, 2.0));
+        float atten = 1.0 / attenMag;
+        atten = atten > 1.0 ? 1.0 : atten;
+        info.I = plight->GetIntensity() * atten;
+        info.L = glm::normalize(direction);
+        info.ka = plight->Ambient.GetRGB();
+    } else if (dLight = dynamic_cast<DirectionalLight*>(light)){
+        info.L = glm::normalize(trace_light->GetTransformDirection());
+        info.I = dLight->GetIntensity();
+        info.ka = dLight->Ambient.GetRGB();
+    }
+}
+
+glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* debug_camera) {
+    Intersection i;
+
+    if (trace_scene.Intersect(r, i)) {
+        Ray newR(r.at(i.t), r.direction);
+        if (i.t < RAY_EPSILON) {
+            newR.position = r.at(0.007);
+            // cout << "shadow" << endl;
+            return GetShadowAtten(newR, trace_scene, debug_camera);
+        }
+
+        Material* mat = i.GetMaterial();
+        glm::vec3 kt = mat->Transmittence->GetColorUV(i.uv);
+        if (debug_camera) {
+            debug_camera->AddDebugRay(r.position, newR.position, RayType::shadow);
+        }
+
+        return kt * GetShadowAtten(newR, trace_scene, debug_camera);
+    }
+    if (debug_camera) {
+        debug_camera->AddDebugRay(r.position, r.at(100), RayType::shadow);
+    }
+
+    return glm::vec3(1.0);
+}
+
+
+
 // Do recursive ray tracing!  You'll want to insert a lot of code here
 // (or places called from here) to handle reflection, refraction, etc etc.
 // Depth is the number of times the ray has intersected an object.
 glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera* debug_camera)
-{
+{   // Depth checking
+    if (depth > settings.max_depth) {
+        // cout << "enter2" << endl;
+        return glm::vec3(0.0);
+    }
+
     Intersection i;
 
     if (debug_camera) {
         glm::dvec3 endpoint = r.at(1000);
         if (trace_scene.Intersect(r, i)) {
             endpoint = r.at(i.t);
-            debug_camera->AddDebugRay(endpoint, endpoint+0.25*(glm::dvec3)i.normal, RayType::hit_normal);
+            debug_camera->AddDebugRay(endpoint, endpoint+ 1.0 *(glm::dvec3)i.normal, RayType::hit_normal);
+            debug_camera->AddDebugRay(glm::dvec3(r.position), glm::dvec3(endpoint), ray_type);
         }
         debug_camera->AddDebugRay(r.position, endpoint, ray_type);
     }
 
-    if (trace_scene.Intersect(r, i)) {     
+    if (trace_scene.Intersect(r, i)) {
         // REQUIREMENT: Implement Raytracing
         // You must implement (see project page for details)
         // 1. Blinn-Phong specular model
@@ -231,6 +302,13 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
         // 4. Reflection
         // 5. Refraction
         // 6. Anti-Aliasing
+
+        // RAY_EPSILON checking
+        if (i.t < RAY_EPSILON) {
+            // cout << "enter" << endl;
+            Ray newR(r.at(0.007), r.direction);
+            return TraceRay(newR, depth, ray_type, debug_camera);
+        }
 
         // An intersection occured!  We've got work to do. For now,
         // this code gets the material parameters for the surface
@@ -246,29 +324,91 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
         // Interpolated normal
         // Use this to when calculating geometry (entering object test, reflection, refraction, etc) or getting smooth shading (light direction test, etc)
         glm::vec3 N = i.normal;
+        if (glm::dot(r.direction, glm::dvec3(N)) > 0.0) {
+            // cout << "Flip Normal" << endl;
+            N = -N;
+        }
 
+        glm::vec3 endpoint = r.at(i.t);
+        glm::vec3 V = glm::normalize(-r.direction);
+        glm::vec3 specular(0.0);
+        glm::vec3 ambient(0.0);
+        glm::vec3 diffuse(0.0);
 
-        return kd;
+        // Store light info for later calculation
+        Light_info info;
+        glm::vec3 I;
+        glm::vec3 L;
+        glm::vec3 H;
+        glm::vec3 shadow(1.0);
+        float dot;
+        Ray toLight(glm::vec3(0, 0, 0), glm::vec3(0, 0, 0));
+        // To iterate over all light sources in the scene, use code like this:
+        for (auto j = trace_scene.lights.begin(); j != trace_scene.lights.end(); j++) {
+            // Light calculation
+            // Directional light testing currently
+            TraceLight* trace_light = *j;
+            GetLightInfo(trace_light, endpoint, info);
+            I = info.I;
+            L = info.L;
+            H = glm::normalize(L + V);
+            dot = glm::dot(N, L);
+            toLight.direction = L;
+            toLight.position = endpoint;
+            // Get shadow attenuation
+            shadow = GetShadowAtten(toLight, trace_scene, debug_camera);
+
+            // Add kt as ambient light
+            if (N == -i.normal) {
+                info.ka = kt * info.ka;
+            }
+            // Bling-phong model
+            ambient += info.ka * kd;
+            diffuse += (dot > 0.000001) ? shadow * I * kd * dot : glm::vec3(0.0);
+            specular +=  (dot > 0.000001) ? shadow * I * ks * pow(glm::dot(N, H), shininess) : glm::vec3(0.0);
+        }
+
+        // Add refraction and reflection contribution
+        glm::vec3 direct = ke + ambient + diffuse + specular;
+        glm::vec3 reflect(0.0);
+        glm::vec3 refract(0.0);
+
+        // Reflection contribution
+        if (settings.reflections && glm::length(ks) > 0.0000001) {
+            glm::dvec3 reflectR = glm::normalize(glm::dvec3(2 * glm::dot(V, N) * N - V));
+            Ray reflectRay(endpoint, reflectR);
+            reflect = ks * TraceRay(reflectRay, depth + 1, RayType::reflection, debug_camera);
+        }
+
+        // Refraction contribution
+        if (settings.refractions && glm::length(kt) > 0.00001) {
+            double ni = INDEX_OF_AIR;
+            double nt = index_of_refraction;
+            if (N == -i.normal) {
+                ni = nt;
+                nt = INDEX_OF_AIR;
+            }
+            double ratio = ni / nt;
+            glm::dvec3 refractR = glm::refract(r.direction, glm::dvec3(N), ratio);
+            if (glm::length(refractR) > 0.0000001) {
+                // glm::dvec3 refractR = glm::normalize((ratio * cosI - sqrt(cosSquare)) * glm::dvec3(N) - ratio * glm::dvec3(V));
+                Ray refractRay(endpoint, refractR);
+                refract = kt * TraceRay(refractRay, depth + 1, RayType::refraction, debug_camera);
+            }
+        }
+
+        return direct + reflect + refract;
 
         // This is a great place to insert code for recursive ray tracing.
         // Compute the blinn-phong shading, and don't stop there:
         // add in contributions from reflected and refracted rays.
 
-        // To iterate over all light sources in the scene, use code like this:
-        // for (auto j = trace_scene.lights.begin(); j != trace_scene.lights.end(); j++) {
-        //   TraceLight* trace_light = *j;
-        //   Light* scene_light = trace_light->light;
-        // }
-
-        // Make sure to test if the Reflections and Refractions checkboxes are enabled in the Render Cam UI
-        // Use this condition, only calculate reflection/refraction if enabled:
-        // if (settings.reflections) { ... }
-        // if (settings.refraction) { ... }
 
     } else {
         // No intersection. This ray travels to infinity, so we color it according to the background color,
         // which in this (simple) case is just black.
         // EXTRA CREDIT: Use environment mapping to determine the color instead
+        // cout << "Enter1" << endl;
         glm::vec3 background_color = glm::vec3(0, 0, 0);
         return background_color;
     }
