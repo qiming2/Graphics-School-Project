@@ -243,15 +243,19 @@ void GetLightInfo(TraceLight* trace_light, const glm::vec3& endP, Light_info& in
     }
 }
 
-glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* debug_camera) {
+glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* debug_camera, double t_light) {
     Intersection i;
 
     if (trace_scene.Intersect(r, i)) {
         Ray newR(r.at(i.t), r.direction);
         if (i.t < RAY_EPSILON) {
-            newR.position = r.at(0.007);
+            newR.position = r.at(0.01);
             // cout << "shadow" << endl;
-            return GetShadowAtten(newR, trace_scene, debug_camera);
+            return GetShadowAtten(newR, trace_scene, debug_camera, t_light);
+        }
+
+        if (i.t >= t_light) {
+            return glm::vec3(1.0, 1.0, 1.0);
         }
 
         Material* mat = i.GetMaterial();
@@ -260,13 +264,13 @@ glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* de
             debug_camera->AddDebugRay(r.position, newR.position, RayType::shadow);
         }
 
-        return kt * GetShadowAtten(newR, trace_scene, debug_camera);
+        return kt * GetShadowAtten(newR, trace_scene, debug_camera, t_light);
     }
-    if (debug_camera) {
-        debug_camera->AddDebugRay(r.position, r.at(100), RayType::shadow);
-    }
+//    if (debug_camera) {
+//        debug_camera->AddDebugRay(r.position, r.at(100), RayType::shadow);
+//    }
 
-    return glm::vec3(1.0);
+    return glm::vec3(1.0, 1.0, 1.0);
 }
 
 
@@ -276,10 +280,10 @@ glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* de
 // Depth is the number of times the ray has intersected an object.
 glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera* debug_camera)
 {   // Depth checking
-    if (depth > settings.max_depth) {
+    //if (depth > settings.max_depth) {
         // cout << "enter2" << endl;
-        return glm::vec3(0.0);
-    }
+      //  return glm::vec3(0.0);
+    //}
 
     Intersection i;
 
@@ -306,7 +310,7 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
         // RAY_EPSILON checking
         if (i.t < RAY_EPSILON) {
             // cout << "enter" << endl;
-            Ray newR(r.at(0.007), r.direction);
+            Ray newR(r.at(0.01), r.direction);
             return TraceRay(newR, depth, ray_type, debug_camera);
         }
 
@@ -324,7 +328,7 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
         // Interpolated normal
         // Use this to when calculating geometry (entering object test, reflection, refraction, etc) or getting smooth shading (light direction test, etc)
         glm::vec3 N = i.normal;
-        if (glm::dot(r.direction, glm::dvec3(N)) > 0.0) {
+        if (glm::dot(glm::dvec3(N), -r.direction) < 0.000001) {
             // cout << "Flip Normal" << endl;
             N = -N;
         }
@@ -356,7 +360,17 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
             toLight.direction = L;
             toLight.position = endpoint;
             // Get shadow attenuation
-            shadow = GetShadowAtten(toLight, trace_scene, debug_camera);
+            Light* light = trace_light->light;
+            if (PointLight* plight = dynamic_cast<PointLight*>(light)) {
+                glm::vec3 light_pos = trace_light->GetTransformPos();
+
+                // light_pos = toLight.position + t(toLight.direction)
+                double t_light = (light_pos.x - toLight.position.x) / (toLight.direction.x);
+
+                shadow = GetShadowAtten(toLight, trace_scene, debug_camera, t_light);
+            } else if (DirectionalLight* dLight = dynamic_cast<DirectionalLight*>(light)) {
+                shadow = GetShadowAtten(toLight, trace_scene, debug_camera, DBL_MAX);
+            }
 
             // Add kt as ambient light
             if (N == -i.normal) {
@@ -364,12 +378,17 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
             }
             // Bling-phong model
             ambient += info.ka * kd;
-            diffuse += (dot > 0.000001) ? shadow * I * kd * dot : glm::vec3(0.0);
-            specular +=  (dot > 0.000001) ? shadow * I * ks * pow(glm::dot(N, H), shininess) : glm::vec3(0.0);
+            diffuse += (dot > 0.000001) && (glm::length(shadow) > 0.000001) ? shadow * I * kd * dot : glm::vec3(0.0);
+            specular +=  (dot > 0.000001) && (glm::length(shadow) > 0.000001) ? shadow * I * ks * pow(glm::dot(N, H), shininess) : glm::vec3(0.0);
         }
 
         // Add refraction and reflection contribution
         glm::vec3 direct = ke + ambient + diffuse + specular;
+
+        if ((uint)depth >= settings.max_depth) {
+            return direct;
+        }
+
         glm::vec3 reflect(0.0);
         glm::vec3 refract(0.0);
 
@@ -388,13 +407,15 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
                 ni = nt;
                 nt = INDEX_OF_AIR;
             }
+
             double ratio = ni / nt;
             glm::dvec3 refractR = glm::refract(r.direction, glm::dvec3(N), ratio);
             if (glm::length(refractR) > 0.0000001) {
-                // glm::dvec3 refractR = glm::normalize((ratio * cosI - sqrt(cosSquare)) * glm::dvec3(N) - ratio * glm::dvec3(V));
+                //glm::dvec3 refractR = glm::normalize((ratio * cosI - sqrt(cosSquare)) * glm::dvec3(N) - ratio * glm::dvec3(V));
                 Ray refractRay(endpoint, refractR);
                 refract = kt * TraceRay(refractRay, depth + 1, RayType::refraction, debug_camera);
             }
+
         }
 
         return direct + reflect + refract;

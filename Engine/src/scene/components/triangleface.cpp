@@ -32,7 +32,7 @@ bool TriangleFace::IntersectLocal(const Ray &r, Intersection &i)
    plane_normal = glm::normalize(plane_normal);
 
    glm::dvec3 d = r.direction;
-   if (abs(glm::dot(plane_normal, d)) < EDGE_EPSILON) { // ray is parallel, no intersection
+   if (abs(glm::dot(plane_normal, d)) < NORMAL_EPSILON) { // ray is parallel, no intersection
        return false;
    }
    glm::dvec3 p = r.position;
@@ -40,6 +40,10 @@ bool TriangleFace::IntersectLocal(const Ray &r, Intersection &i)
 
    // Get the t intersect value
    i.t = (k - glm::dot(plane_normal, p)) / glm::dot(plane_normal, d);
+
+   if (i.t < RAY_EPSILON) {
+       return false;
+   }
 
    // Intersection point on the plane
    glm::dvec3 Q = r.at(i.t);
