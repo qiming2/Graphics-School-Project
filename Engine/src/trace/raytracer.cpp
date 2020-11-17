@@ -170,10 +170,24 @@ void RayTracer::ComputePixel(int i, int j, Camera* debug_camera) {
 
     switch (settings.samplecount_mode) {
         case Camera::TRACESAMPLING_CONSTANT:
+        {
             // REQUIREMENT: Implement Anti-aliasing
             //              use setting.constant_samples_per_pixel to get the amount of samples of a pixel for anti-alasing
-            color = SampleCamera(x_corner, y_corner, settings.pixel_size_x, settings.pixel_size_y, debug_camera);
+
+            int divisions = sqrt(settings.constant_samples_per_pixel);
+
+            for (int i = 0; i < divisions; i++) {
+                for (int j = 0; j < divisions; j++) {
+                    double xpos = x_corner + ((settings.pixel_size_x / divisions) * i);
+                    double ypos = y_corner + ((settings.pixel_size_y / divisions) * j);
+                    color += SampleCamera(xpos, ypos, settings.pixel_size_x / divisions, settings.pixel_size_y / divisions, debug_camera);
+                }
+            }
+
+            color /= settings.constant_samples_per_pixel;
+
             break;
+        }
         default:
             break;
     }
