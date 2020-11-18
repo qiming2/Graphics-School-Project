@@ -43,6 +43,8 @@ Camera::Camera(double fov, int render_width, int render_height, double near_plan
     TraceShadows({"No Shadows", "Opaque Shadows Only", "Translucent Shadows"}, 2),
     TraceEnableReflection(true),
     TraceEnableRefraction(true),
+    TraceEnableFresnel(false),
+    TraceEnableBeer(false),
 
     TraceDebugger()
 {
@@ -75,6 +77,8 @@ Camera::Camera(double fov, int render_width, int render_height, double near_plan
         TraceSettings.AddProperty("Shadows", &TraceShadows);
         TraceSettings.AddProperty("Reflections", &TraceEnableReflection);
         TraceSettings.AddProperty("Refractions", &TraceEnableRefraction);
+        TraceSettings.AddProperty("Fresnel", &TraceEnableFresnel);
+        TraceSettings.AddProperty("Beer", &TraceEnableBeer);
         //TraceSettings.AddProperty("Flares Only", &TraceFlaresOnly);
 
     AddProperty("Trace Debugger", &TraceDebugger);
@@ -105,6 +109,8 @@ Camera::Camera(double fov, int render_width, int render_height, double near_plan
     TraceShadows.ValueSet.Connect(this, &Camera::UpdateHiddenTracePropertiesInt);
     TraceEnableReflection.ValueSet.Connect(this, &Camera::UpdateHiddenTracePropertiesBool);
     TraceEnableRefraction.ValueSet.Connect(this, &Camera::UpdateHiddenTracePropertiesBool);
+    TraceEnableFresnel.ValueSet.Connect(this, &Camera::UpdateHiddenTracePropertiesBool);
+    TraceEnableBeer.ValueSet.Connect(this, &Camera::UpdateHiddenTracePropertiesBool);
     UpdateHiddenTracePropertiesInt();
 }
 

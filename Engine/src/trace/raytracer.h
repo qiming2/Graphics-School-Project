@@ -59,6 +59,8 @@ class RayTracer {
         bool translucent_shadows;
         bool reflections;
         bool refractions;
+        bool fresnel;
+        bool beer;
 
 
         glm::dvec3 projection_origin;
@@ -110,6 +112,7 @@ private:
     // Thresh is used to terminate ray tracing early if the ray contribution is too little.
     glm::vec3 TraceRay(const Ray& r, int depth, RayType ray_type, Camera* debug_camera=nullptr);
     glm::vec3 SampleCamera(double x_corner, double y_corner, double pixel_size_x, double pixel_size_y, Camera* debug_camera=nullptr);
+    glm::vec3 RayTracer::GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* debug_camera, double t_light, glm::vec3& light);
 };
 
 // Worker thread for raytracing
