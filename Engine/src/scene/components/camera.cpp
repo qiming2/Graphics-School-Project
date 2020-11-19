@@ -43,12 +43,9 @@ Camera::Camera(double fov, int render_width, int render_height, double near_plan
     TraceShadows({"No Shadows", "Opaque Shadows Only", "Translucent Shadows"}, 2),
     TraceEnableReflection(true),
     TraceEnableRefraction(true),
-<<<<<<< HEAD
     TraceEnableRayScale(false),
-=======
     TraceEnableFresnel(false),
     TraceEnableBeer(false),
->>>>>>> 73f12a9b074d244dad6d94eaf4624447ca4546ff
 
     TraceDebugger()
 {
