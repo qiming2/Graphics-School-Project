@@ -68,6 +68,7 @@ public:
     ChoiceProperty TraceShadows;
     BooleanProperty TraceEnableReflection;
     BooleanProperty TraceEnableRefraction;
+    BooleanProperty TraceEnableRayScale;
 
     std::map<int, std::unique_ptr<BooleanProperty>> trace_debug_views;
 
@@ -93,6 +94,7 @@ public:
         TraceConstantSampleCount.SetHidden(TraceSampleCountMode.Get()!=TRACESAMPLING_CONSTANT);
         TraceSampleMinCount.SetHidden(TraceSampleCountMode.Get()==TRACESAMPLING_CONSTANT);
         TraceSampleMaxCount.SetHidden(TraceSampleCountMode.Get()==TRACESAMPLING_CONSTANT);
+        TraceEnableRayScale.SetHidden(TraceSampleCountMode.Get()==TRACESAMPLING_CONSTANT);
         TraceAdaptiveSamplingMaxDiff.SetHidden(TraceSampleCountMode.Get()!=TRACESAMPLING_RECURSIVE);
         TraceStdErrorSamplingCutoff.SetHidden(TraceSampleCountMode.Get()!=TRACESAMPLING_STDERROR);
     }

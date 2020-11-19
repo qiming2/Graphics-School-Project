@@ -59,6 +59,7 @@ class RayTracer {
         bool translucent_shadows;
         bool reflections;
         bool refractions;
+        bool rayscale;
 
 
         glm::dvec3 projection_origin;
@@ -80,6 +81,9 @@ class RayTracer {
 
     // computes+colors the pixel at this window coordinate
     void ComputePixel(int i, int j, Camera* debug_camera=nullptr);
+
+    // Performs Adaptive Ray Tracing Operators
+    void AdaptiveTracing(double x, double y, uint depth, glm::vec3& color, int& rays, Camera* debug_camera=nullptr);
 
 
     std::string GetErrorMessage() {

@@ -18,6 +18,7 @@
 #include <scene/components/triangleface.h>
 #include <glm/gtx/string_cast.hpp>
 #include "components.h"
+#include <queue>
 
 using namespace std;
 
@@ -44,6 +45,7 @@ RayTracer::RayTracer(Scene& scene, SceneObject& camobj) :
     settings.translucent_shadows = cam->TraceShadows.Get() == Camera::TRACESHADOWS_COLORED;
     settings.reflections = cam->TraceEnableReflection.Get();
     settings.refractions = cam->TraceEnableRefraction.Get();
+    settings.rayscale = cam->TraceEnableRayScale.Get();
 
     settings.random_mode = cam->TraceRandomMode.Get();
     settings.diffuse_reflection = cam->TraceEnableReflection.Get() && cam->TraceDiffuseReflection.Get() && settings.random_mode != Camera::TRACERANDOM_DETERMINISTIC;
@@ -151,6 +153,38 @@ double RayTracer::AspectRatio() {
 }
 
 
+void RayTracer::AdaptiveTracing(double x, double y, uint depth, glm::vec3& color, int& rays, Camera* debug_camera) {
+    double x_size = settings.pixel_size_x / pow(2, depth);
+    double y_size = settings.pixel_size_y / pow(2, depth);
+
+    // If we're at or past the max depth, add computed value to color
+    if (depth >= settings.dynamic_sampling_max_depth) {
+        color += SampleCamera(x, y, x_size, y_size, debug_camera);
+        rays = rays + 1;
+    } else {
+        // Sample the corners and see if it meets the threshold
+        glm::vec3 ul = SampleCamera(x, y, 0, 0, debug_camera);
+        glm::vec3 ur = SampleCamera(x + x_size, y, 0, 0, debug_camera);
+        glm::vec3 ll = SampleCamera(x, y + y_size, 0, 0, debug_camera);
+        glm::vec3 lr = SampleCamera(x + x_size, y + y_size, 0, 0, debug_camera);
+
+        double thresh = sqrt(settings.adaptive_max_diff_squared);
+
+        if (glm::length(abs(ul - ur)) > thresh || glm::length(abs(ul - ll)) > thresh || glm::length(abs(ul - lr)) > thresh
+                || glm::length(abs(ur - ll)) > thresh || glm::length(abs(ur - lr)) > thresh || glm::length(abs(ll - lr)) > thresh) {
+            // Recursively subdivide the area
+            AdaptiveTracing(x, y, depth + 1, color, rays, debug_camera);
+            AdaptiveTracing(x + (x_size / 2), y, depth + 1, color, rays, debug_camera);
+            AdaptiveTracing(x, y + (y_size / 2), depth + 1, color, rays, debug_camera);
+            AdaptiveTracing(x + (x_size / 2), y + (y_size / 2), depth + 1, color, rays, debug_camera);
+        } else {
+            // Just shoot one ray to add to color and stop recursing
+            color += SampleCamera(x, y, x_size, y_size, debug_camera);
+            rays = rays + 1;
+        }
+    }
+}
+
 void RayTracer::ComputePixel(int i, int j, Camera* debug_camera) {
     // Calculate the normalized coordinates [0, 1]
     double x_corner = i * settings.pixel_size_x;
@@ -173,20 +207,62 @@ void RayTracer::ComputePixel(int i, int j, Camera* debug_camera) {
         {
             // REQUIREMENT: Implement Anti-aliasing
             //              use setting.constant_samples_per_pixel to get the amount of samples of a pixel for anti-alasing
-
             int divisions = sqrt(settings.constant_samples_per_pixel);
 
-            for (int i = 0; i < divisions; i++) {
-                for (int j = 0; j < divisions; j++) {
-                    double xpos = x_corner + ((settings.pixel_size_x / divisions) * i);
-                    double ypos = y_corner + ((settings.pixel_size_y / divisions) * j);
-                    color += SampleCamera(xpos, ypos, settings.pixel_size_x / divisions, settings.pixel_size_y / divisions, debug_camera);
+            if (settings.random_mode == Camera::TRACERANDOM_UNIFORM) {
+                // Random position sampling
+                uint samples = 0;
+                while (samples < settings.constant_samples_per_pixel) {
+                    double xpos = x_corner + ((double)rand() / RAND_MAX) * settings.pixel_size_y;
+                    double ypos = y_corner + ((double)rand() / RAND_MAX) * settings.pixel_size_y;
+                    color += SampleCamera(xpos, ypos, 0, 0, debug_camera);
+                    samples++;
+                }
+            } else if (settings.random_mode == Camera::TRACERANDOM_STRATIFIED) {
+                // Random sub-pixel jittering sampling
+                for (int i = 0; i < divisions; i++) {
+                    for (int j = 0; j < divisions; j++) {
+                        double xpos = x_corner + ((settings.pixel_size_x / divisions) * i) + (((double)rand() / RAND_MAX) * (settings.pixel_size_x / divisions));
+                        double ypos = y_corner + ((settings.pixel_size_y / divisions) * j) + (((double)rand() / RAND_MAX) * (settings.pixel_size_y / divisions));
+                        color += SampleCamera(xpos, ypos, 0, 0, debug_camera);
+                    }
+                }
+
+            } else {
+                // Normal sampling for anti aliasing
+                for (int i = 0; i < divisions; i++) {
+                    for (int j = 0; j < divisions; j++) {
+                        double xpos = x_corner + ((settings.pixel_size_x / divisions) * i);
+                        double ypos = y_corner + ((settings.pixel_size_y / divisions) * j);
+                        color += SampleCamera(xpos, ypos, settings.pixel_size_x / divisions, settings.pixel_size_y / divisions, debug_camera);
+                    }
                 }
             }
 
+            // Average out the color
             color /= settings.constant_samples_per_pixel;
 
             break;
+        }
+        case Camera::TRACESAMPLING_RECURSIVE:
+        {
+            int min_divisions = pow(2, settings.dynamic_sampling_min_depth);
+            int rays = 0;
+            for (int i = 0; i < min_divisions; i++) {
+                for (int j = 0; j < min_divisions; j++) {
+                    double xpos = x_corner + ((settings.pixel_size_x / min_divisions) * i);
+                    double ypos = y_corner + ((settings.pixel_size_y / min_divisions) * j);
+                    AdaptiveTracing(xpos, ypos, settings.dynamic_sampling_min_depth, color, rays, debug_camera);
+                }
+            }
+
+            if (settings.rayscale) {
+                color.x = rays / pow(2, settings.dynamic_sampling_max_depth);
+                color.y = rays / pow(2, settings.dynamic_sampling_max_depth);
+                color.z = rays / pow(2, settings.dynamic_sampling_max_depth);
+            } else {
+                color /= rays;
+            }
         }
         default:
             break;
@@ -234,10 +310,8 @@ typedef struct Light_info {
 } Light_info;
 
 void GetLightInfo(TraceLight* trace_light, const glm::vec3& endP, Light_info& info) {
-    PointLight* plight;
-    DirectionalLight* dLight;
     Light* light = trace_light->light;
-    if (plight = dynamic_cast<PointLight*>(light)) {
+    if (PointLight* plight = dynamic_cast<PointLight*>(light)) {
         double a = plight->AttenA.Get();
         double b = plight->AttenB.Get();
         double c = plight->AttenC.Get();
@@ -250,7 +324,7 @@ void GetLightInfo(TraceLight* trace_light, const glm::vec3& endP, Light_info& in
         info.I = plight->GetIntensity() * atten;
         info.L = glm::normalize(direction);
         info.ka = plight->Ambient.GetRGB();
-    } else if (dLight = dynamic_cast<DirectionalLight*>(light)){
+    } else if (DirectionalLight* dLight = dynamic_cast<DirectionalLight*>(light)){
         info.L = glm::normalize(trace_light->GetTransformDirection());
         info.I = dLight->GetIntensity();
         info.ka = dLight->Ambient.GetRGB();
@@ -305,7 +379,7 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
         glm::dvec3 endpoint = r.at(1000);
         if (trace_scene.Intersect(r, i)) {
             endpoint = r.at(i.t);
-            debug_camera->AddDebugRay(endpoint, endpoint+ 1.0 *(glm::dvec3)i.normal, RayType::hit_normal);
+            debug_camera->AddDebugRay(endpoint, endpoint+ 0.25 *(glm::dvec3)i.normal, RayType::hit_normal);
             debug_camera->AddDebugRay(glm::dvec3(r.position), glm::dvec3(endpoint), ray_type);
         }
         debug_camera->AddDebugRay(r.position, endpoint, ray_type);
