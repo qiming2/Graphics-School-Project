@@ -151,8 +151,8 @@ void GLRenderer::Render(SceneObject& node) {
     if (node_prefix_.empty() || node.GetName().compare(0, node_prefix_.length(), node_prefix_) == 0) {
         try {
             // If you have GL_INVALID_OPERATION errors, try uncommenting these:
-            //glEnable              ( GL_DEBUG_OUTPUT );
-            //glDebugMessageCallback( GLErrorMessageCallback, 0 );
+            // glEnable              ( GL_DEBUG_OUTPUT );
+            // glDebugMessageCallback( GLErrorMessageCallback, 0 );
 
             // Should start off with no errors
             GLCheckError();

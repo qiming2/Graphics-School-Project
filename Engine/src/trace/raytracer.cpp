@@ -46,6 +46,8 @@ RayTracer::RayTracer(Scene& scene, SceneObject& camobj) :
     settings.reflections = cam->TraceEnableReflection.Get();
     settings.refractions = cam->TraceEnableRefraction.Get();
     settings.rayscale = cam->TraceEnableRayScale.Get();
+    settings.fresnel = cam->TraceEnableFresnel.Get();
+    settings.beer = cam->TraceEnableBeer.Get();
 
     settings.random_mode = cam->TraceRandomMode.Get();
     settings.diffuse_reflection = cam->TraceEnableReflection.Get() && cam->TraceDiffuseReflection.Get() && settings.random_mode != Camera::TRACERANDOM_DETERMINISTIC;
@@ -331,7 +333,7 @@ void GetLightInfo(TraceLight* trace_light, const glm::vec3& endP, Light_info& in
     }
 }
 
-glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* debug_camera, double t_light) {
+glm::vec3 RayTracer::GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* debug_camera, double t_light, glm::vec3& light) {
     Intersection i;
 
     if (trace_scene.Intersect(r, i)) {
@@ -339,7 +341,7 @@ glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* de
         if (i.t < RAY_EPSILON) {
             newR.position = r.at(0.01);
             // cout << "shadow" << endl;
-            return GetShadowAtten(newR, trace_scene, debug_camera, t_light);
+            return GetShadowAtten(newR, trace_scene, debug_camera, t_light, light);
         }
 
         if (i.t >= t_light) {
@@ -352,7 +354,17 @@ glm::vec3 GetShadowAtten(const Ray& r, const TraceScene& trace_scene, Camera* de
             debug_camera->AddDebugRay(r.position, newR.position, RayType::shadow);
         }
 
-        return kt * GetShadowAtten(newR, trace_scene, debug_camera, t_light);
+        if (settings.beer) {
+            if (glm::dot(glm::dvec3(i.normal), -r.direction) < 0.000001) {
+                // cout << "Flip Normal" << endl;
+                kt.x = light.x * exp(log(kt.x) * i.t);
+                kt.y = light.y * exp(log(kt.y) * i.t);
+                kt.z = light.z * exp(log(kt.z) * i.t);
+            } else {
+                kt = glm::vec3(1.0);
+            }
+        }
+        return kt * GetShadowAtten(newR, trace_scene, debug_camera, t_light, kt);
     }
 //    if (debug_camera) {
 //        debug_camera->AddDebugRay(r.position, r.at(100), RayType::shadow);
@@ -455,9 +467,9 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
                 // light_pos = toLight.position + t(toLight.direction)
                 double t_light = (light_pos.x - toLight.position.x) / (toLight.direction.x);
 
-                shadow = GetShadowAtten(toLight, trace_scene, debug_camera, t_light);
+                shadow = GetShadowAtten(toLight, trace_scene, debug_camera, t_light, I);
             } else if (DirectionalLight* dLight = dynamic_cast<DirectionalLight*>(light)) {
-                shadow = GetShadowAtten(toLight, trace_scene, debug_camera, DBL_MAX);
+                shadow = GetShadowAtten(toLight, trace_scene, debug_camera, DBL_MAX, I);
             }
 
             // Add kt as ambient light
@@ -479,28 +491,36 @@ glm::vec3 RayTracer::TraceRay(const Ray& r, int depth, RayType ray_type, Camera*
 
         glm::vec3 reflect(0.0);
         glm::vec3 refract(0.0);
-
+        double ni = INDEX_OF_AIR;
+        double nt = index_of_refraction;
+        if (N == -i.normal) {
+            ni = nt;
+            nt = INDEX_OF_AIR;
+        }
+        float R0 = pow(((nt - 1)/(nt + 1)), 2.0);
+        float R = R0 + (1 - R0) * pow(1.0 - glm::dot(N, V), 5.0);
         // Reflection contribution
         if (settings.reflections && glm::length(ks) > 0.0000001) {
             glm::dvec3 reflectR = glm::normalize(glm::dvec3(2 * glm::dot(V, N) * N - V));
             Ray reflectRay(endpoint, reflectR);
+            if (settings.fresnel) {
+                ks = ks * R;
+            }
             reflect = ks * TraceRay(reflectRay, depth + 1, RayType::reflection, debug_camera);
         }
 
         // Refraction contribution
         if (settings.refractions && glm::length(kt) > 0.00001) {
-            double ni = INDEX_OF_AIR;
-            double nt = index_of_refraction;
-            if (N == -i.normal) {
-                ni = nt;
-                nt = INDEX_OF_AIR;
-            }
+
 
             double ratio = ni / nt;
             glm::dvec3 refractR = glm::refract(r.direction, glm::dvec3(N), ratio);
             if (glm::length(refractR) > 0.0000001) {
                 //glm::dvec3 refractR = glm::normalize((ratio * cosI - sqrt(cosSquare)) * glm::dvec3(N) - ratio * glm::dvec3(V));
                 Ray refractRay(endpoint, refractR);
+                if (settings.fresnel) {
+                    kt = kt * (1 - R);
+                }
                 refract = kt * TraceRay(refractRay, depth + 1, RayType::refraction, debug_camera);
             }
 

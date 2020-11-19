@@ -69,6 +69,8 @@ public:
     BooleanProperty TraceEnableReflection;
     BooleanProperty TraceEnableRefraction;
     BooleanProperty TraceEnableRayScale;
+    BooleanProperty TraceEnableFresnel;
+    BooleanProperty TraceEnableBeer;
 
     std::map<int, std::unique_ptr<BooleanProperty>> trace_debug_views;
 
