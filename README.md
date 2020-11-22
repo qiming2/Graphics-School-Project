@@ -1,38 +1,16 @@
-## Trace
+# Computer Graphics School Project
+### By Qiming Guan
 
-Who worked on this project?
+#### Contributions in the project
+  - Implemented an API creating meshes with a provided edge curve to form a surface of revolution.
+  - Developed an API for mesh filtering
+  - Implemented several shaders using OpenGL shader programming languages including alpha test shader, pointlight shdaer, spotlight shader, bling-phong shader, cartoon shader
+  - Implemented ray tracing that uses bling-phong shader and produces realistic refraction, reflection and shadow within a scene. (Beer's shadow attenuation effect is also achieved)
+  - Animation curve (In progress)
 
-- Qiming Guan and Jack Skinner
+Example ray-tracing frame:
 
-What operating system did you develop on?
-
-- Qiming: Windows
-- Jack: Windows
-
-How did you split work amongst partners (if any) in this project?
-
-- Qiming: ray trace
-- Jack: intersections, anti-aliasing
+![Ray-tracing frame](qiming2.png)
 
 
-## Bells and Whistles
-
-Which bells and whistles did you attempt to do, which did you complete?
-
-- Qiming: Fresnel, Beer (They are set to false by default on camera)
-- Jack: Adaptive AA (Check RayScale to render ray intensity image), Uniform Random AA, Stratified Random AA
-
-Was there anything out of the ordinary that we should know about?
-## Feedback
-
-About how long did you and your partners (if any) spend on this project?
-
-- Qiming: 13 hrs
-- Jack: 12 hrs
-
-What was the hardest part about this project?
-
-- Needs to take care of floating point precision issue
-- Forgetting epsilon checks :(
-
-Is there anything you would change about this project?
+Aforementioned contribution can be experimented using QT IDE to clone this project.
