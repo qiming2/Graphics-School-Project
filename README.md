@@ -13,4 +13,4 @@ Example ray-tracing frame:
 ![Ray-tracing frame](qiming2.png)
 
 
-Aforementioned contribution can be experimented using QT IDE to clone this project.
+Code can not be revealed due to copyright contents
