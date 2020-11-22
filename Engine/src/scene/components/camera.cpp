@@ -43,6 +43,7 @@ Camera::Camera(double fov, int render_width, int render_height, double near_plan
     TraceShadows({"No Shadows", "Opaque Shadows Only", "Translucent Shadows"}, 2),
     TraceEnableReflection(true),
     TraceEnableRefraction(true),
+    TraceEnableRayScale(false),
     TraceEnableFresnel(false),
     TraceEnableBeer(false),
 
@@ -77,6 +78,7 @@ Camera::Camera(double fov, int render_width, int render_height, double near_plan
         TraceSettings.AddProperty("Shadows", &TraceShadows);
         TraceSettings.AddProperty("Reflections", &TraceEnableReflection);
         TraceSettings.AddProperty("Refractions", &TraceEnableRefraction);
+        TraceSettings.AddProperty("RayScale", &TraceEnableRayScale);
         TraceSettings.AddProperty("Fresnel", &TraceEnableFresnel);
         TraceSettings.AddProperty("Beer", &TraceEnableBeer);
         //TraceSettings.AddProperty("Flares Only", &TraceFlaresOnly);
