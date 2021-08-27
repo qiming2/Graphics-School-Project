@@ -25,4 +25,4 @@ Ex Revolution_mesh:
   Example ray-tracing frame:
 
   ![Ray-tracing frame](ray_tracing.png)
-  - Animation curve (In progress)
+  - Animation curve
